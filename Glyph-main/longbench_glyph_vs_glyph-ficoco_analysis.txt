@@ -1,0 +1,83 @@
+LongBench 对比分析：glyph vs glyph-ficoco
+
+对比对象
+- glyph 基线结果：/root/autodl-tmp/Data/longbench/pred/gen_env_full/result.json
+- glyph-ficoco 结果：/root/autodl-tmp/Data/longbench/eval_results/gen_env_ficoco_full/result.json
+- glyph token 统计：/root/autodl-tmp/Data/longbench/pred/gen_env_full/token_stat.json
+- glyph-ficoco token 统计：/root/autodl-tmp/Data/longbench/eval_results/gen_env_ficoco_full/token_stat.json
+
+一、总体结论
+1. glyph-ficoco 没有在 LongBench 上取得整体优势，绝大多数提升都很小，而主要退化集中在 Multi-doc QA。
+2. glyph-ficoco 的最大问题出现在 2wikimqa，分数从 46.42 降到 37.69，下降 8.73 分，这是两者差距的主要来源。
+3. glyph-ficoco 在少数任务上有轻微提升，例如 qasper、samsum、qmsum、repobench-p，但提升幅度都较小，无法抵消多文档问答任务的下降。
+4. glyph-ficoco 的平均 prompt token 从 279.47 降到 253.4，总 token 从 1327465 降到 1203667，说明它更节省上下文或生成开销，但当前节省并没有转化为更好的最终效果。
+
+二、类别级对比
+类别分数如下：
+- Single-doc QA: glyph 14.96, glyph-ficoco 15.01, 差值 +0.05
+- Multi-doc QA: glyph 28.83, glyph-ficoco 26.2, 差值 -2.63
+- Summarization: glyph 11.58, glyph-ficoco 11.46, 差值 -0.12
+- Few shot: glyph 39.38, glyph-ficoco 39.12, 差值 -0.26
+- Synthetic: glyph 2.0, glyph-ficoco 1.5, 差值 -0.5
+- Code: glyph 35.43, glyph-ficoco 35.48, 差值 +0.05
+
+分析：
+- glyph-ficoco 的类别表现基本可以概括为“单文档和代码几乎持平，多文档明显退化”。
+- Code 和 Single-doc QA 基本与 glyph 持平，说明 FiCoCo 并没有破坏短链路、局部证据型任务。
+- Multi-doc QA 明显下降，表明 FiCoCo 在需要跨文档整合、检索多跳证据、保持长上下文覆盖率时存在信息损失或注意力偏移。
+- Synthetic 和 Few shot 也有小幅下降，说明 FiCoCo 没有带来通用推理收益，反而可能因为上下文压缩或视觉化处理改变了原有提示分布。
+
+三、数据集级对比
+glyph-ficoco 相比 glyph 的提升项：
+- qasper: 13.8 -> 14.4, +0.6
+- samsum: 32.65 -> 33.01, +0.36
+- qmsum: 16.79 -> 16.9, +0.11
+- repobench-p: 56.0 -> 56.1, +0.1
+- multifieldqa_en: 13.53 -> 13.61, +0.08
+- multifieldqa_zh: 22.55 -> 22.58, +0.03
+- lcc: 14.86 -> 14.86, 0.0
+- passage_count: 0.0 -> 0.0, 0.0
+
+glyph-ficoco 相比 glyph 的主要下降项：
+- 2wikimqa: 46.42 -> 37.69, -8.73
+- passage_retrieval_en: 4.0 -> 3.0, -1.0
+- trec: 14.5 -> 13.5, -1.0
+- hotpotqa: 29.72 -> 29.05, -0.67
+- musique: 18.28 -> 17.62, -0.66
+- passage_retrieval_zh: 2.0 -> 1.5, -0.5
+- narrativeqa: 9.95 -> 9.46, -0.49
+- dureader: 20.91 -> 20.43, -0.48
+
+分析：
+- 2wikimqa 的大幅下降说明 FiCoCo 在最依赖多跳证据对齐的任务上不稳定。这通常意味着输入重构后，模型更难稳定保留跨段落的实体链接和因果链。
+- hotpotqa、musique 也同步下降，进一步支持这个判断。这不是单一数据集偶然波动，而是多文档问答上的系统性退化。
+- qasper、qmsum、samsum 的小幅提升说明 FiCoCo 对部分“长文但证据相对集中”的任务可能有帮助，尤其是文本块结构更规整、答案范围更局部时。
+- Code 任务几乎不变，说明 FiCoCo 没有显著改变代码类匹配和补全行为。
+
+四、token 使用对比
+- 平均 prompt token: glyph 279.47, glyph-ficoco 253.4, 差值 -26.07
+- 总 prompt token: glyph 1327465, glyph-ficoco 1203667, 差值 -123798
+
+重点数据集 token 变化：
+- 2wikimqa: glyph 1372.4, glyph-ficoco 753.41
+- repobench-p: glyph 1024.47, glyph-ficoco 1024.47
+- triviaqa: glyph 751.52, glyph-ficoco 751.52
+- narrativeqa: glyph 102.96, glyph-ficoco 102.96
+
+分析：
+- glyph-ficoco 的 token 节省几乎全部来自 Multi-doc QA，尤其是 2wikimqa。
+- 2wikimqa 的 token 从 1372.4 降到 753.41，同时分数大幅下降，说明这里的 token 节省并不是更高效，而更像是证据覆盖不足。
+- 对于 repobench-p、triviaqa、narrativeqa 等任务，token 基本不变，说明 FiCoCo 并没有在所有任务上重塑输入，只是在某些任务上显著压缩了上下文。
+- 当前结果表明 FiCoCo 的收益更接近“压缩输入”，而不是“在相同信息量下提升推理质量”。
+
+五、原因推断
+1. FiCoCo 可能削弱了多文档任务中的全局证据可见性。多页图像化或重排后，原本连续的文本证据被切碎，模型检索路径变长。
+2. 在 2wikimqa、hotpotqa、musique 这类多跳任务中，答案往往依赖多个段落同时被稳定命中，任何压缩、分页、截断、版面变化都可能导致性能下降。
+3. 小幅提升主要出现在答案证据更局部、结构更规整的任务上，说明 FiCoCo 更适合局部信息抽取，不擅长高密度跨文档聚合。
+4. token 下降而效果下降，说明当前 FiCoCo 配置更像是“以更少上下文换更快/更省”，但这套 trade-off 对 LongBench 的核心长上下文任务并不划算。
+
+六、结论建议
+1. 如果目标是 LongBench 总体效果，当前结果不支持用 glyph-ficoco 替代 glyph 基线。
+2. 如果目标是降低 token 成本，glyph-ficoco 确实有效，但应限定在对多跳证据整合不敏感的子任务上使用。
+3. 后续若继续优化 FiCoCo，优先应检查多文档任务中的页面切分、证据保留率、跨页顺序一致性、以及是否存在关键段落在图像化后可读性下降的问题。
+4. 最值得重点复查的是 2wikimqa、hotpotqa、musique 三个任务，因为它们最能暴露 FiCoCo 在长上下文证据聚合上的问题。
